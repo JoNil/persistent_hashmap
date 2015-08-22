@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/JoNil/persistent_hashmap.png?branch=master)](https://travis-ci.org/JoNil/persistent_hashmap)
 
-Persistent hashmap is a library for working with memory mapped arrays
+Persistent hashmap is a library for working with memory mapped hashmaps
 
 [Documentation](https://jonil.github.io/persistent_hashmap/persistent_hashmap/index.html)
 
