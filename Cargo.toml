@@ -1,0 +1,17 @@
+[package]
+name = "persistent_hashmap"
+version = "0.0.1"
+authors = ["Jonathan Nilsson <l.a.jonathan.nilsson@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/JoNil/persistent_hashmap"
+documentation = "https://jonil.github.io/persistent_hashmap/persistent_hashmap/index.html"
+description = "Persistent hashmap is a library for working with memory mapped hashmaps"
+readme = "README.md"
+
+exclude = [
+  ".gitignore",
+  ".travis.yml",
+]
+
+[dependencies]
+persistent_array = "*"
