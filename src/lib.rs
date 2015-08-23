@@ -1,13 +1,15 @@
 #![feature(reflect_marker)]
 
 extern crate persistent_array;
+extern crate twox_hash;
 
 use std::default::Default;
-use std::hash::{Hash, Hasher, SipHasher};
+use std::hash::{Hash, Hasher};
 use std::marker::{PhantomData, Reflect};
 use std::path::Path;
 
 use persistent_array::{Error, PersistentArray};
+use twox_hash::XxHash;
 
 const OCCUPIED_MASK: u64 = 0x8000_0000_0000_0000;
 const HASH_MASK: u64 = 0x7FFF_FFFF_FFFF_FFFF;
@@ -38,7 +40,7 @@ pub struct PersistentHashmap<K: KeyTypeBounds, V: ValueTypeBounds> {
 
 #[inline]
 fn hash<K: Hash>(v: K) -> u64 {
-    let mut s = SipHasher::new();
+    let mut s = XxHash::with_seed(0);
     v.hash(&mut s);
     s.finish()
 }
