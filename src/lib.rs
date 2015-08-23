@@ -36,16 +36,19 @@ pub struct PersistentHashmap<K: KeyTypeBounds, V: ValueTypeBounds> {
     array: PersistentArray<HashmapEntry<V>>,
 }
 
+#[inline]
 fn hash<K: Hash>(v: K) -> u64 {
     let mut s = SipHasher::new();
     v.hash(&mut s);
     s.finish()
 }
 
+#[inline]
 fn hash_equal(h1: u64, h2: u64) -> bool {
     h1 & HASH_MASK == h2 & HASH_MASK
 }
 
+#[inline]
 fn state_is_occupeid(state: u64) -> bool {
     state & OCCUPIED_MASK == OCCUPIED_MASK
 }
@@ -123,11 +126,13 @@ impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
         }
     }
 
+    #[inline]
     fn get_slot_and_hash(&self, k: K) -> (u64, u64) {
         let hash = hash(k) | OCCUPIED_MASK;
         (hash % self.array.len() as u64, hash)
     }
 
+    #[inline]
     fn find_entry_slot(&self, start_slot: u64, hash: u64) -> Option<u64> {
         
         let array_slice: &[HashmapEntry<V>] = &*self.array;
