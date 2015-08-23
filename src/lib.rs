@@ -9,6 +9,9 @@ use std::path::Path;
 
 use persistent_array::{Error, PersistentArray};
 
+const OCCUPIED_MASK: u64 = 0x8000_0000_0000_0000;
+const HASH_MASK: u64 = 0x7FFF_FFFF_FFFF_FFFF;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InsertError {
     IsFull,
@@ -20,22 +23,11 @@ impl<T: Hash> KeyTypeBounds for T {}
 pub trait ValueTypeBounds: Copy + Default + Reflect + 'static {}
 impl<T: Copy + Default + Reflect + 'static> ValueTypeBounds for T {}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-enum EntryState {
-    Empty,
-    Occupied,
-}
-
-impl Default for EntryState {
-    fn default() -> EntryState { EntryState::Empty }
-}
-
 #[derive(Clone, Copy, Default)]
 #[repr(C, packed)]
 struct HashmapEntry<V> {
-    hash: u64,
-    state: EntryState,
+    // 1 bit occupied and 63 bit hash
+    state: u64,
     value: V,
 }
 
@@ -48,6 +40,14 @@ fn hash<K: Hash>(v: K) -> u64 {
     let mut s = SipHasher::new();
     v.hash(&mut s);
     s.finish()
+}
+
+fn hash_equal(h1: u64, h2: u64) -> bool {
+    h1 & HASH_MASK == h2 & HASH_MASK
+}
+
+fn state_is_occupeid(state: u64) -> bool {
+    state & OCCUPIED_MASK == OCCUPIED_MASK
 }
 
 impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
@@ -83,37 +83,25 @@ impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
     }
 
     pub fn insert(&mut self, k: K, v: V) -> Result<Option<V>, InsertError> {
+        
         let (slot, hash) = self.get_slot_and_hash(k);
 
-        let size = self.array.len() as u64;
-        let mut slot_counter = slot;
-        
-        while self.array[slot_counter as usize].hash != hash &&
-              self.array[slot_counter as usize].state == EntryState::Occupied {
+        let entry_slot = match self.find_entry_slot(slot, hash) {
+            Some(slot) => slot,
+            None => return Err(InsertError::IsFull),
+        };
 
-            slot_counter = (slot_counter + 1) %  size;
+        let entry = &mut self.array[entry_slot as usize];
 
-            if slot_counter == slot {
-                return Err(InsertError::IsFull);
-            }
-        }
-
-        let entry = &mut self.array[slot_counter as usize];
-
-        entry.hash = hash;
-
-        match entry.state {
-            EntryState::Empty => {
-                entry.value = v;
-                entry.state = EntryState::Occupied;
-                Ok(None)
-            },
-            EntryState::Occupied => {
-                let old = entry.value;
-                entry.value = v;
-                entry.state = EntryState::Occupied;
-                Ok(Some(old))
-            },
+        if state_is_occupeid(entry.state) {
+            let old = entry.value;
+            entry.value = v;
+            entry.state = hash;
+            Ok(Some(old))
+        } else {
+            entry.value = v;
+            entry.state = hash;
+            Ok(None)
         }
     }
 
@@ -121,37 +109,41 @@ impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
 
         let (slot, hash) = self.get_slot_and_hash(k);
 
-        let size = self.array.len() as u64;
-        let mut slot_counter = slot;
-        
+        let entry_slot = match self.find_entry_slot(slot, hash) {
+            Some(slot) => slot,
+            None => return None,
+        };
 
-        while self.array[slot_counter as usize].hash != hash &&
-              self.array[slot_counter as usize].state == EntryState::Occupied {
+        let entry = &self.array[entry_slot as usize];
 
-            slot_counter = (slot_counter + 1) % size;
-
-            if slot_counter == slot {
-                return None;
-            }
-        }
-
-        let entry = &self.array[slot_counter as usize];
-
-        match entry.state {
-            EntryState::Empty => {
-                None
-            },
-            EntryState::Occupied => {
-                if hash != entry.hash {
-                    panic!("Wrong hash stored here");
-                }
-                Some(entry.value)
-            },
+        if state_is_occupeid(entry.state) {
+            Some(entry.value)
+        } else {
+            None
         }
     }
 
     fn get_slot_and_hash(&self, k: K) -> (u64, u64) {
-        let hash = 0x8000_0000_0000_0000 | hash(k);
+        let hash = hash(k) | OCCUPIED_MASK;
         (hash % self.array.len() as u64, hash)
+    }
+
+    fn find_entry_slot(&self, start_slot: u64, hash: u64) -> Option<u64> {
+        
+        let array_slice: &[HashmapEntry<V>] = &*self.array;
+        let size = array_slice.len() as u64;
+        let mut slot_counter = start_slot;
+        
+        while !hash_equal(array_slice[slot_counter as usize].state, hash) &&
+              state_is_occupeid(array_slice[slot_counter as usize].state) {
+
+            slot_counter = (slot_counter + 1) %  size;
+
+            if slot_counter == start_slot {
+                return None
+            }
+        }
+
+        Some(slot_counter)
     }
 }
