@@ -2,13 +2,17 @@
 
 extern crate persistent_array;
 
-use std::borrow::Borrow;
 use std::default::Default;
 use std::hash::{Hash, Hasher, SipHasher};
 use std::marker::{PhantomData, Reflect};
 use std::path::Path;
 
-use persistent_array::{PersistentArray, Error};
+use persistent_array::{Error, PersistentArray};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InsertError {
+    IsFull,
+}
 
 pub trait KeyTypeBounds: Hash {}
 impl<T: Hash> KeyTypeBounds for T {}
@@ -16,7 +20,8 @@ impl<T: Hash> KeyTypeBounds for T {}
 pub trait ValueTypeBounds: Copy + Default + Reflect + 'static {}
 impl<T: Copy + Default + Reflect + 'static> ValueTypeBounds for T {}
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
 enum EntryState {
     Empty,
     Occupied,
@@ -27,6 +32,7 @@ impl Default for EntryState {
 }
 
 #[derive(Clone, Copy, Default)]
+#[repr(C, packed)]
 struct HashmapEntry<V> {
     hash: u64,
     state: EntryState,
@@ -76,23 +82,37 @@ impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
         })
     }
 
-    pub fn insert(&mut self, k: K, v: V) -> Option<V> {
+    pub fn insert(&mut self, k: K, v: V) -> Result<Option<V>, InsertError> {
         let (slot, hash) = self.get_slot_and_hash(k);
 
-        let entry = &mut self.array[slot as usize];
+        let size = self.array.len() as u64;
+        let mut slot_counter = slot;
+        
+        while self.array[slot_counter as usize].hash != hash &&
+              self.array[slot_counter as usize].state == EntryState::Occupied {
+
+            slot_counter = (slot_counter + 1) %  size;
+
+            if slot_counter == slot {
+                return Err(InsertError::IsFull);
+            }
+        }
+
+        let entry = &mut self.array[slot_counter as usize];
 
         entry.hash = hash;
-        entry.state = EntryState::Occupied;
 
         match entry.state {
             EntryState::Empty => {
                 entry.value = v;
-                None
+                entry.state = EntryState::Occupied;
+                Ok(None)
             },
             EntryState::Occupied => {
                 let old = entry.value;
                 entry.value = v;
-                Some(old)
+                entry.state = EntryState::Occupied;
+                Ok(Some(old))
             },
         }
     }
@@ -101,14 +121,30 @@ impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
 
         let (slot, hash) = self.get_slot_and_hash(k);
 
-        let entry = &self.array[slot as usize];
+        let size = self.array.len() as u64;
+        let mut slot_counter = slot;
+        
 
+        while self.array[slot_counter as usize].hash != hash &&
+              self.array[slot_counter as usize].state == EntryState::Occupied {
+
+            slot_counter = (slot_counter + 1) % size;
+
+            if slot_counter == slot {
+                return None;
+            }
+        }
+
+        let entry = &self.array[slot_counter as usize];
 
         match entry.state {
             EntryState::Empty => {
                 None
             },
             EntryState::Occupied => {
+                if hash != entry.hash {
+                    panic!("Wrong hash stored here");
+                }
                 Some(entry.value)
             },
         }
