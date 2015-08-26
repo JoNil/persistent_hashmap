@@ -1,11 +1,9 @@
-#![feature(reflect_marker)]
-
 extern crate persistent_array;
 extern crate twox_hash;
 
 use std::default::Default;
 use std::hash::{Hash, Hasher};
-use std::marker::{PhantomData, Reflect};
+use std::marker::PhantomData;
 use std::path::Path;
 
 use persistent_array::{Error, PersistentArray};
@@ -22,8 +20,8 @@ pub enum InsertError {
 pub trait KeyTypeBounds: Hash {}
 impl<T: Hash> KeyTypeBounds for T {}
 
-pub trait ValueTypeBounds: Copy + Default + Reflect + 'static {}
-impl<T: Copy + Default + Reflect + 'static> ValueTypeBounds for T {}
+pub trait ValueTypeBounds: Copy + Default {}
+impl<T: Copy + Default> ValueTypeBounds for T {}
 
 #[derive(Clone, Copy, Default)]
 #[repr(C, packed)]
