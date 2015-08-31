@@ -125,7 +125,6 @@ fn test5() {
 
 #[test]
 fn test6() {
-
     {
         let mut db = PersistentHashmap::<String, u32>::new("test6.db", 5).unwrap();
 
@@ -137,6 +136,28 @@ fn test6() {
     }
     {
         let db = PersistentHashmap::<String, u32>::open("test6.db").unwrap();
+
+        assert_eq!(db.get("1"), Some(1));
+        assert_eq!(db.get("2"), Some(2));
+        assert_eq!(db.get("3"), Some(3));
+        assert_eq!(db.get("4"), Some(4));
+        assert_eq!(db.get("5"), Some(5));
+    }
+}
+
+#[test]
+fn test7() {
+    {
+        let mut db = PersistentHashmap::<str, u32>::new("test7.db", 5).unwrap();
+
+        assert_eq!(db.insert("1", 1), Ok(None));
+        assert_eq!(db.insert("2", 2), Ok(None));
+        assert_eq!(db.insert("3", 3), Ok(None));
+        assert_eq!(db.insert("4", 4), Ok(None));
+        assert_eq!(db.insert("5", 5), Ok(None));
+    }
+    {
+        let db = PersistentHashmap::<str, u32>::open("test7.db").unwrap();
 
         assert_eq!(db.get("1"), Some(1));
         assert_eq!(db.get("2"), Some(2));
