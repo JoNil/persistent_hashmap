@@ -81,14 +81,14 @@ fn test4() {
         let mut db = PersistentHashmap::<u64, u64>::new("test4.db", capacity).unwrap();
 
         for i in 0..size {
-            assert_eq!(db.insert(i, i), Ok(None));    
+            assert_eq!(db.insert(&i, i), Ok(None));    
         }
     }
     {
         let db = PersistentHashmap::<u64, u64>::open("test4.db").unwrap();
 
         for i in 0..size {
-            assert_eq!(db.get(i), Some(i));    
+            assert_eq!(db.get(&i), Some(i));    
         }
     }
 }
@@ -120,5 +120,28 @@ fn test5() {
         assert_eq!(db.get("3"), Some(Data { a: 3, b: 4, c: *b"he3" }));
         assert_eq!(db.get("4"), Some(Data { a: 4, b: 5, c: *b"he4" }));
         assert_eq!(db.get("5"), Some(Data { a: 5, b: 6, c: *b"he5" }));
+    }
+}
+
+#[test]
+fn test6() {
+
+    {
+        let mut db = PersistentHashmap::<String, u32>::new("test6.db", 5).unwrap();
+
+        assert_eq!(db.insert("1", 1), Ok(None));
+        assert_eq!(db.insert("2", 2), Ok(None));
+        assert_eq!(db.insert("3", 3), Ok(None));
+        assert_eq!(db.insert("4", 4), Ok(None));
+        assert_eq!(db.insert("5", 5), Ok(None));
+    }
+    {
+        let db = PersistentHashmap::<String, u32>::open("test6.db").unwrap();
+
+        assert_eq!(db.get("1"), Some(1));
+        assert_eq!(db.get("2"), Some(2));
+        assert_eq!(db.get("3"), Some(3));
+        assert_eq!(db.get("4"), Some(4));
+        assert_eq!(db.get("5"), Some(5));
     }
 }

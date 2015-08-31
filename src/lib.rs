@@ -1,12 +1,12 @@
 extern crate persistent_array;
 extern crate twox_hash;
 
+use persistent_array::{Error, PersistentArray};
+use std::borrow::Borrow;
 use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::path::Path;
-
-use persistent_array::{Error, PersistentArray};
 use twox_hash::XxHash;
 
 const OCCUPIED_MASK: u64 = 0x8000_0000_0000_0000;
@@ -17,12 +17,6 @@ pub enum InsertError {
     IsFull,
 }
 
-pub trait KeyTypeBounds: Hash {}
-impl<T: Hash> KeyTypeBounds for T {}
-
-pub trait ValueTypeBounds: Copy + Default {}
-impl<T: Copy + Default> ValueTypeBounds for T {}
-
 #[derive(Clone, Copy, Default)]
 #[repr(C, packed)]
 struct HashmapEntry<V> {
@@ -31,13 +25,13 @@ struct HashmapEntry<V> {
     value: V,
 }
 
-pub struct PersistentHashmap<K: KeyTypeBounds, V: ValueTypeBounds> {
+pub struct PersistentHashmap<K: ?Sized, V> {
     phantom_type: PhantomData<K>,
     array: PersistentArray<HashmapEntry<V>>,
 }
 
 #[inline]
-fn hash<K: Hash>(v: K) -> u64 {
+fn hash<K: ?Sized + Hash>(v: &K) -> u64 {
     let mut s = XxHash::with_seed(0);
     v.hash(&mut s);
     s.finish()
@@ -53,7 +47,7 @@ fn state_is_occupeid(state: u64) -> bool {
     state & OCCUPIED_MASK == OCCUPIED_MASK
 }
 
-impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
+impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
 
     /// Creates a new persistent hashmap
     pub fn new<P>(path: P, size: u64) -> Result<PersistentHashmap<K, V>, Error>
@@ -85,7 +79,9 @@ impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
         })
     }
 
-    pub fn insert(&mut self, k: K, v: V) -> Result<Option<V>, InsertError> {
+    pub fn insert<Q: ?Sized>(&mut self, k: &Q, v: V) -> Result<Option<V>, InsertError>
+            where K: Borrow<Q>,
+                  Q: Hash {
         
         let (slot, hash) = self.get_slot_and_hash(k);
 
@@ -108,7 +104,9 @@ impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
         }
     }
 
-    pub fn get(&self, k: K) -> Option<V> {
+    pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<V>
+            where K: Borrow<Q>,
+                  Q: Hash {
 
         let (slot, hash) = self.get_slot_and_hash(k);
 
@@ -127,7 +125,7 @@ impl<K: KeyTypeBounds, V: ValueTypeBounds> PersistentHashmap<K, V> {
     }
 
     #[inline]
-    fn get_slot_and_hash(&self, k: K) -> (u64, u64) {
+    fn get_slot_and_hash<Q: ?Sized + Hash>(&self, k: &Q) -> (u64, u64) {
         let hash = hash(k) | OCCUPIED_MASK;
         (hash % self.array.len() as u64, hash)
     }
