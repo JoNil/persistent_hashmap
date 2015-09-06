@@ -1,6 +1,15 @@
+#![feature(plugin)]
+
+#![plugin(clippy)]
+
+#![warn(cast_possible_truncation, cast_possible_wrap, cast_precision_loss, cast_sign_loss,
+        non_ascii_literal, shadow_same, string_add, string_add_assign, unicode_not_nfc)]
+
+extern crate num;
 extern crate persistent_array;
 extern crate twox_hash;
 
+use num::traits::NumCast;
 use persistent_array::{Error, PersistentArray};
 use std::borrow::Borrow;
 use std::default::Default;
@@ -90,7 +99,9 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
             None => return Err(InsertError::IsFull),
         };
 
-        let entry = &mut self.array[entry_slot as usize];
+        let index: usize = NumCast::from(entry_slot).unwrap();
+
+        let entry = &mut self.array[index];
 
         if state_is_occupeid(entry.state) {
             let old = entry.value;
@@ -115,7 +126,9 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
             None => return None,
         };
 
-        let entry = &self.array[entry_slot as usize];
+        let index: usize = NumCast::from(entry_slot).unwrap();
+
+        let entry = &self.array[index];
 
         if state_is_occupeid(entry.state) {
             Some(entry.value)
@@ -136,11 +149,13 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
         let array_slice: &[HashmapEntry<V>] = &*self.array;
         let size = array_slice.len() as u64;
         let mut slot_counter = start_slot;
+        let mut index: usize = NumCast::from(slot_counter).unwrap();
         
-        while !hash_equal(array_slice[slot_counter as usize].state, hash) &&
-              state_is_occupeid(array_slice[slot_counter as usize].state) {
+        while !hash_equal(array_slice[index].state, hash) &&
+              state_is_occupeid(array_slice[index].state) {
 
             slot_counter = (slot_counter + 1) %  size;
+            index = NumCast::from(slot_counter).unwrap();
 
             if slot_counter == start_slot {
                 return None
