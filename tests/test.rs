@@ -1,3 +1,10 @@
+#![feature(plugin)]
+
+#![plugin(clippy)]
+
+#![warn(cast_possible_truncation, cast_possible_wrap, cast_precision_loss, cast_sign_loss,
+        non_ascii_literal, shadow_same, string_add, string_add_assign, unicode_not_nfc)]
+
 extern crate persistent_hashmap;
 
 use persistent_hashmap::{InsertError, PersistentHashmap};
@@ -75,7 +82,7 @@ fn test3() {
 fn test4() {
 
     let capacity = 10*1024*1024;
-    let size = 1*1024*1024;
+    let size = 1024*1024;
 
     {
         let mut db = PersistentHashmap::<u64, u64>::new("test4.db", capacity).unwrap();
