@@ -8,8 +8,9 @@
 
 extern crate num;
 extern crate persistent_array;
-extern crate twox_hash;
+extern crate fnv;
 
+use fnv::FnvHasher;
 use num::traits::NumCast;
 use persistent_array::{Error, PersistentArray};
 use std::borrow::Borrow;
@@ -17,7 +18,6 @@ use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::path::Path;
-use twox_hash::XxHash;
 
 const OCCUPIED_MASK: u64 = 0x8000_0000_0000_0000;
 const HASH_MASK: u64 = 0x7FFF_FFFF_FFFF_FFFF;
@@ -42,7 +42,7 @@ pub struct PersistentHashmap<K: ?Sized, V> {
 
 #[inline]
 fn hash<K: ?Sized + Hash>(v: &K) -> u64 {
-    let mut s = XxHash::with_seed(0);
+    let mut s: FnvHasher = Default::default();
     v.hash(&mut s);
     s.finish()
 }
