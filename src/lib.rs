@@ -6,11 +6,9 @@
 // option. All files in the project carrying such notice may not be copied,
 // modified, or distributed except according to those terms.
 
-extern crate num;
 extern crate persistent_array;
 extern crate twox_hash;
 
-use num::traits::NumCast;
 use persistent_array::{Error, PersistentArray};
 use std::borrow::Borrow;
 use std::default::Default;
@@ -27,15 +25,21 @@ pub enum InsertError {
     IsFull,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Copy, Default)]
 #[repr(C, packed)]
-struct HashmapEntry<V> {
+struct HashmapEntry<V: Copy> {
     // 1 bit occupied and 63 bit hash
     state: u64,
     value: V,
 }
 
-pub struct PersistentHashmap<K: ?Sized, V> {
+impl<V: Copy> Clone for HashmapEntry<V> {
+    fn clone(&self) -> HashmapEntry<V> {
+        *self
+    }
+}
+
+pub struct PersistentHashmap<K: ?Sized, V: Copy> {
     phantom_type: PhantomData<K>,
     array: PersistentArray<HashmapEntry<V>>,
 }
@@ -58,11 +62,11 @@ fn state_is_occupeid(state: u64) -> bool {
 }
 
 impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
-
     /// Creates a new persistent hashmap
     pub fn new<P>(path: P, size: u64) -> Result<PersistentHashmap<K, V>, Error>
-            where P: AsRef<Path> {
-        
+    where
+        P: AsRef<Path>,
+    {
         let array = match PersistentArray::new(&path, size) {
             Ok(array) => array,
             Err(err) => return Err(err),
@@ -76,8 +80,9 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
 
     /// Opens an existing persistent hashmap
     pub fn open<P>(path: P) -> Result<PersistentHashmap<K, V>, Error>
-            where P: AsRef<Path> {
-
+    where
+        P: AsRef<Path>,
+    {
         let array = match PersistentArray::open(&path) {
             Ok(array) => array,
             Err(err) => return Err(err),
@@ -90,9 +95,10 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
     }
 
     pub fn insert<Q: ?Sized>(&mut self, k: &Q, v: V) -> Result<Option<V>, InsertError>
-            where K: Borrow<Q>,
-                  Q: Hash {
-        
+    where
+        K: Borrow<Q>,
+        Q: Hash,
+    {
         let (slot, hash) = self.get_slot_and_hash(k);
 
         let entry_slot = match self.find_entry_slot(slot, hash) {
@@ -100,7 +106,7 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
             None => return Err(InsertError::IsFull),
         };
 
-        let index: usize = NumCast::from(entry_slot).unwrap();
+        let index: usize = entry_slot as usize;
 
         let entry = &mut self.array[index];
 
@@ -117,9 +123,10 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
     }
 
     pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<V>
-            where K: Borrow<Q>,
-                  Q: Hash {
-
+    where
+        K: Borrow<Q>,
+        Q: Hash,
+    {
         let (slot, hash) = self.get_slot_and_hash(k);
 
         let entry_slot = match self.find_entry_slot(slot, hash) {
@@ -127,7 +134,7 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
             None => return None,
         };
 
-        let index: usize = NumCast::from(entry_slot).unwrap();
+        let index: usize = entry_slot as usize;
 
         let entry = &self.array[index];
 
@@ -146,20 +153,19 @@ impl<K: ?Sized, V: Copy + Default> PersistentHashmap<K, V> {
 
     #[inline]
     fn find_entry_slot(&self, start_slot: u64, hash: u64) -> Option<u64> {
-        
         let array_slice: &[HashmapEntry<V>] = &*self.array;
         let size = array_slice.len() as u64;
         let mut slot_counter = start_slot;
-        let mut index: usize = NumCast::from(slot_counter).unwrap();
-        
-        while !hash_equal(array_slice[index].state, hash) &&
-              state_is_occupeid(array_slice[index].state) {
+        let mut index: usize = slot_counter as usize;
 
-            slot_counter = (slot_counter + 1) %  size;
-            index = NumCast::from(slot_counter).unwrap();
+        while !hash_equal(array_slice[index].state, hash)
+            && state_is_occupeid(array_slice[index].state)
+        {
+            slot_counter = (slot_counter + 1) % size;
+            index = slot_counter as usize;
 
             if slot_counter == start_slot {
-                return None
+                return None;
             }
         }
 
